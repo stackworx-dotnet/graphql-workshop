@@ -12,67 +12,69 @@
    1. `dotnet new sln -n ConferencePlanner`
    1. `dotnet new web -n GraphQL`
    1. `dotnet sln add GraphQL`
+1. Add the following to the GraphQL.csproj `PropertyGroup` to supress the namespace warnings
+```xml
+<RootNamespace>ConferencePlanner.GraphQL</RootNamespace>
+```
 1. Add a new folder `Data` where we want to place all our database related code.
    1. `mkdir GraphQL/Data`
 1. Add a new file `Speaker.cs` in the `Data` directory using the following code:
 
     ```csharp
+    namespace ConferencePlanner.GraphQL.Data;
+
     using System.ComponentModel.DataAnnotations;
 
-    namespace ConferencePlanner.GraphQL.Data
+    public class Speaker
     {
-        public class Speaker
-        {
-            public int Id { get; set; }
+        public int Id { get; set; }
 
-            [Required]
-            [StringLength(200)]
-            public string Name { get; set; }
+        [Required]
+        [StringLength(200)]
+        public string Name { get; set; }
 
-            [StringLength(4000)]
-            public string Bio { get; set; }
+        [StringLength(4000)]
+        public string? Bio { get; set; }
 
-            [StringLength(1000)]
-            public virtual string WebSite { get; set; }
-        }
+        [StringLength(1000)]
+        public virtual string WebSite { get; set; }
     }
     ```
 
-1. Add a reference to the NuGet package package `Microsoft.EntityFrameworkCore.Sqlite` version `5.0.0`.
-   1. `dotnet add GraphQL package Microsoft.EntityFrameworkCore.Sqlite --version 5.0.0`
+1. Add a reference to the NuGet package package `Microsoft.EntityFrameworkCore.Sqlite` version `6.0.5`.
+   1. `dotnet add GraphQL package Microsoft.EntityFrameworkCore.Sqlite --version 6.0.5`
 1. Next we'll create a new Entity Framework DbContext. Create a new `ApplicationDbContext` class in the `Data` folder using the following code:
 
     ```csharp
+    namespace ConferencePlanner.GraphQL.Data;
+
     using Microsoft.EntityFrameworkCore;
 
-    namespace ConferencePlanner.GraphQL.Data
+    public class ApplicationDbContext : DbContext
     {
-        public class ApplicationDbContext : DbContext
+        public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+            : base(options)
         {
-            public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
-                : base(options)
-            {
-            }
-
-            public DbSet<Speaker> Speakers { get; set; }
         }
+
+        public DbSet<Speaker> Speakers => this.Set<Speaker>();
     }
     ```
 
 ## Register the DB Context Service
 
-1. Add the following code to the top of the `ConfigureServices()` method in `Startup.cs`:
+1. Add the following code in `Program.cs` before `builder.Build()`:
 
     ```csharp
-    services.AddDbContext<ApplicationDbContext>(options => options.UseSqlite("Data Source=conferences.db"));
+    builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite("Data Source=conferences.db"));
     ```
 
     > This code registers the `ApplicationDbContext` service so it can be injected into resolvers.
 
 ## Configuring EF Migrations
 
-1. Add a reference to the NuGet package `Microsoft.EntityFrameworkCore.Tools` version `5.0.0`.
-   1. `dotnet add GraphQL package Microsoft.EntityFrameworkCore.Tools --version 5.0.0`
+1. Add a reference to the NuGet package `Microsoft.EntityFrameworkCore.Tools` version `6.0.5`.
+   1. `dotnet add GraphQL package Microsoft.EntityFrameworkCore.Tools --version 6.0.5`
 
 ### Option 1 - Visual Studio: Package Manager Console
 
@@ -91,10 +93,10 @@
 
    ```console
    dotnet new tool-manifest
-   dotnet tool install dotnet-ef --version 5.0.0 --local
+   dotnet tool install dotnet-ef --version 6.0.5 --local
    ```
 
-2. Open a command prompt and navigate to the project directory. (The directory containing the `Startup.cs` file).
+2. Open a command prompt and navigate to the project directory. (The directory containing the `Program.cs` file).
 
 3. Run the following commands in the command prompt:
 
@@ -115,94 +117,78 @@ Commands Explained
 
 ## Adding GraphQL
 
-1. Add a reference to the NuGet package package `HotChocolate.AspNetCore` version `11.0.0`.
-   1. `dotnet add GraphQL package HotChocolate.AspNetCore --version 11.0.0`
+1. Add a reference to the NuGet package package `HotChocolate.AspNetCore` version `12.0.9`.
+   1. `dotnet add GraphQL package HotChocolate.AspNetCore --version 12.0.9`
 1. Next we'll create our query root type (`Query.cs`) and add a resolver that fetches all of our speakers.
 
     ```csharp
-    using System.Linq;
     using HotChocolate;
     using ConferencePlanner.GraphQL.Data;
 
-    namespace ConferencePlanner.GraphQL
+    namespace ConferencePlanner.GraphQL;
+
+    public class Query
     {
-        public class Query
-        {
-            public IQueryable<Speaker> GetSpeakers([Service] ApplicationDbContext context) =>
-                context.Speakers;
-        }
+        public IQueryable<Speaker> GetSpeakers([Service] ApplicationDbContext context) =>
+            context.Speakers;
     }
     ```
 
-1. Before we can do anything with our query root type we need to setup GraphQL and register our query root type. Add the following code below `AddDbContext` in the `ConfigureServices()` method in `Startup.cs`:
+1. Before we can do anything with our query root type we need to setup GraphQL and register our query root type. Add the following code below `AddDbContextFactory` in `Program.cs`:
 
     ```csharp
-    services
+    builder.Services
         .AddGraphQLServer()
         .AddQueryType<Query>();
     ```
 
     > The above code registers a GraphQL schema with our dependency injection and with that registers our `Query` type.
 
-1. Next we need to configure our GraphQL middleware so that the server knows how to execute GraphQL requests. For this replace `app.UseEndpoints...` with the following code in the method  `Configure(IApplicationBuilder app, IWebHostEnvironment env)` in the `Startup.cs`
+1. Next we need to configure our GraphQL middleware so that the server knows how to execute GraphQL requests. For this add `app.MapGraphQL();` before `app.Run()` in `Program.cs`
 
     ```csharp
-    app.UseEndpoints(endpoints =>
-    {
-        endpoints.MapGraphQL();
-    });
-    ```
-
-    > Your Startup.cs should now look like the following:
-
-    ```csharp
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Threading.Tasks;
     using ConferencePlanner.GraphQL;
     using ConferencePlanner.GraphQL.Data;
-    using Microsoft.AspNetCore.Builder;
-    using Microsoft.AspNetCore.Hosting;
-    using Microsoft.AspNetCore.Http;
     using Microsoft.EntityFrameworkCore;
-    using Microsoft.Extensions.DependencyInjection;
-    using Microsoft.Extensions.Hosting;
 
-    namespace GraphQL
-    {
-        public class Startup
-        {
-            // This method gets called by the runtime. Use this method to add services to the container.
-            // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
-            public void ConfigureServices(IServiceCollection services)
-            {
-                services.AddDbContext<ApplicationDbContext>(
-                    options => options.UseSqlite("Data Source=conferences.db"));
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseSqlite("Data Source=conferences.db"));
 
-                services
-                    .AddGraphQLServer()
-                    .AddQueryType<Query>();
-            }
+    builder.Services
+        .AddGraphQLServer()
+        .AddQueryType<Query>();
 
-            // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-            public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
-            {
-                if (env.IsDevelopment())
-                {
-                    app.UseDeveloperExceptionPage();
-                }
+    var app = builder.Build();
 
-                app.UseRouting();
+    app.MapGet("/", () => "Hello World!");
 
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapGraphQL();
-                });
-            }
-        }
-    }
+    app.MapGraphQL();
+
+    app.Run();
     ```
+
+1. Modify `GraphQL/Properties/launchSettings.json`. Change the default port in `applicationUrl` and add a `launchUrl` property
+
+```json
+{
+    ...
+    "profiles": {
+        "GraphQL": {
+        "commandName": "Project",
+        "dotnetRunMessages": true,
+        "launchBrowser": true,
+        "launchUrl": "https://localhost:5001/graphql",
+        "applicationUrl": "https://localhost:5001;http://localhost:5000",
+        "environmentVariables": {
+            "ASPNETCORE_ENVIRONMENT": "Development"
+        }
+        },
+    ...
+    }
+}
+```
+
+
 
 1. Start the server.
    1. `dotnet run --project GraphQL`
@@ -232,13 +218,12 @@ So, for our `addSpeaker` mutation, we create two types: `AddSpeakerInput` and `A
 1. Add a file `AddSpeakerInput.cs` to your project with the following code:
 
     ```csharp
-    namespace ConferencePlanner.GraphQL
-    {
-        public record AddSpeakerInput(
-            string Name,
-            string Bio,
-            string WebSite);
-    }
+    namespace ConferencePlanner.GraphQL;
+
+    public record AddSpeakerInput(
+        string Name,
+        string Bio,
+        string WebSite);
     ```
 
    > The input and output (payload) both contain a client mutation identifier used to reconcile requests and responses in some client frameworks.
@@ -246,49 +231,47 @@ So, for our `addSpeaker` mutation, we create two types: `AddSpeakerInput` and `A
 1. Next we add our `AddSpeakerPayload` which represents the output of our GraphQL mutation by adding the following code:
 
     ```csharp
+    namespace ConferencePlanner.GraphQL;
+
     using ConferencePlanner.GraphQL.Data;
 
-    namespace ConferencePlanner.GraphQL
+    public class AddSpeakerPayload
     {
-        public class AddSpeakerPayload
+        public AddSpeakerPayload(Speaker speaker)
         {
-            public AddSpeakerPayload(Speaker speaker)
-            {
-                Speaker = speaker;
-            }
-
-            public Speaker Speaker { get; }
+            Speaker = speaker;
         }
+
+        public Speaker Speaker { get; }
     }
     ```
 
 1. Now lets add the actual mutation type with our `addSpeaker` mutation in it.
 
     ```csharp
+    namespace ConferencePlanner.GraphQL;
+
     using System.Threading.Tasks;
     using ConferencePlanner.GraphQL.Data;
     using HotChocolate;
 
-    namespace ConferencePlanner.GraphQL
+    public class Mutation
     {
-        public class Mutation
+        public async Task<AddSpeakerPayload> AddSpeakerAsync(
+            AddSpeakerInput input,
+            [Service] ApplicationDbContext context)
         {
-            public async Task<AddSpeakerPayload> AddSpeakerAsync(
-                AddSpeakerInput input,
-                [Service] ApplicationDbContext context)
+            var speaker = new Speaker
             {
-                var speaker = new Speaker
-                {
-                    Name = input.Name,
-                    Bio = input.Bio,
-                    WebSite = input.WebSite
-                };
+                Name = input.Name,
+                Bio = input.Bio,
+                WebSite = input.WebSite
+            };
 
-                context.Speakers.Add(speaker);
-                await context.SaveChangesAsync();
+            context.Speakers.Add(speaker);
+            await context.SaveChangesAsync();
 
-                return new AddSpeakerPayload(speaker);
-            }
+            return new AddSpeakerPayload(speaker);
         }
     }
     ```
@@ -296,7 +279,7 @@ So, for our `addSpeaker` mutation, we create two types: `AddSpeakerInput` and `A
 1. Last but not least you need to add the new `Mutation` type to your schema:
 
     ```csharp
-    services
+    builder.Services
         .AddGraphQLServer()
         .AddQueryType<Query>()
         .AddMutationType<Mutation>();
