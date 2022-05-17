@@ -117,8 +117,8 @@ Commands Explained
 
 ## Adding GraphQL
 
-1. Add a reference to the NuGet package package `HotChocolate.AspNetCore` version `12.0.9`.
-   1. `dotnet add GraphQL package HotChocolate.AspNetCore --version 12.0.9`
+1. Add a reference to the NuGet package package `HotChocolate.AspNetCore` version `12.9.0`.
+   1. `dotnet add GraphQL package HotChocolate.AspNetCore --version 12.9.0`
 1. Next we'll create our query root type (`Query.cs`) and add a resolver that fetches all of our speakers.
 
     ```csharp
