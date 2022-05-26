@@ -29,19 +29,16 @@ First, we will restructure our GraphQL server so that it will better scale once 
 1. Create a class `Payload.cs` in the `Common` directory with the following code:
 
     ```csharp
-    using System.Collections.Generic;
+    namespace ConferencePlanner.GraphQL.Common;
 
-    namespace ConferencePlanner.GraphQL.Common
+    public abstract class Payload
     {
-        public abstract class Payload
+        protected Payload(IReadOnlyList<UserError>? errors = null)
         {
-            protected Payload(IReadOnlyList<UserError>? errors = null)
-            {
-                Errors = errors;
-            }
-
-            public IReadOnlyList<UserError>? Errors { get; }
+            Errors = errors;
         }
+
+        public IReadOnlyList<UserError>? Errors { get; }
     }
     ```
 
