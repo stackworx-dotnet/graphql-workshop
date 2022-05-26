@@ -48,21 +48,9 @@ First, we will restructure our GraphQL server so that it will better scale once 
 1. Next, we create a new class `UserError` that is also located in the `Common` directory with the following code:
 
    ```csharp
-   namespace ConferencePlanner.GraphQL.Common
-   {
-       public class UserError
-       {
-           public UserError(string message, string code)
-            {
-               Message = message;
-               Code = code;
-            }
+    namespace ConferencePlanner.GraphQL.Common;
 
-            public string Message { get; }
-
-            public string Code { get; }
-       }
-   }
+    public record UserError(string Message, string Code);
    ```
 
 Now, that we have some base classes for our mutation let us start to reorganize the mutation type.
@@ -78,35 +66,29 @@ Now, that we have some base classes for our mutation let us start to reorganize 
 1. Now, annotate the renamed class with the `ExtendObjectTypeAttribute.` The class should look like this now:
 
     ```csharp
-    using System.Threading;
-    using System.Threading.Tasks;
-    using ConferencePlanner.GraphQL.Common;
+    namespace ConferencePlanner.GraphQL.Speakers;
+
     using ConferencePlanner.GraphQL.Data;
-    using HotChocolate;
-    using HotChocolate.Types;
 
-    namespace ConferencePlanner.GraphQL.Speakers
+    [ExtendObjectType("Mutation")]
+    public class SpeakerMutations
     {
-        [ExtendObjectType("Mutation")]
-        public class SpeakerMutations
+        [UseDbContext(typeof(ApplicationDbContext))]
+        public async Task<AddSpeakerPayload> AddSpeakerAsync(
+            AddSpeakerInput input,
+            [ScopedService] ApplicationDbContext context)
         {
-            [UseApplicationDbContext]
-            public async Task<AddSpeakerPayload> AddSpeakerAsync(
-                AddSpeakerInput input,
-                [ScopedService] ApplicationDbContext context)
+            var speaker = new Speaker
             {
-                var speaker = new Speaker
-                {
-                    Name = input.Name,
-                    Bio = input.Bio,
-                    WebSite = input.WebSite
-                };
+                Name = input.Name,
+                Bio = input.Bio,
+                WebSite = input.WebSite
+            };
 
-                context.Speakers.Add(speaker);
-                await context.SaveChangesAsync();
+            context.Speakers.Add(speaker);
+            await context.SaveChangesAsync();
 
-                return new AddSpeakerPayload(speaker);
-            }
+            return new AddSpeakerPayload(speaker);
         }
     }
     ```
@@ -114,61 +96,56 @@ Now, that we have some base classes for our mutation let us start to reorganize 
 1. Move the `AddSpeakerInput.cs` into the `Speakers` directory.
 
     ```csharp
-    namespace ConferencePlanner.GraphQL.Speakers
-    {
-        public record AddSpeakerInput(
-            string Name,
-            string? Bio,
-            string? WebSite);
-    }
+    namespace ConferencePlanner.GraphQL.Speakers;
+
+    public record AddSpeakerInput(
+        string Name,
+        string Bio,
+        string WebSite);
     ```
 
 1. Next, create a new class `SpeakerPayloadBase` with the following code:
 
     ```csharp
-    using System.Collections.Generic;
+    namespace ConferencePlanner.GraphQL.Speakers;
+
     using ConferencePlanner.GraphQL.Common;
     using ConferencePlanner.GraphQL.Data;
 
-    namespace ConferencePlanner.GraphQL.Speakers
+    public class SpeakerPayloadBase : Payload
     {
-        public class SpeakerPayloadBase : Payload
+        protected SpeakerPayloadBase(Speaker speaker)
         {
-            protected SpeakerPayloadBase(Speaker speaker)
-            {
-                Speaker = speaker;
-            }
-
-            protected SpeakerPayloadBase(IReadOnlyList<UserError> errors)
-                : base(errors)
-            {
-            }
-
-            public Speaker? Speaker { get; }
+            this.Speaker = speaker;
         }
+
+        protected SpeakerPayloadBase(IReadOnlyList<UserError> errors)
+            : base(errors)
+        {
+        }
+        
+        public Speaker? Speaker { get; }
     }
     ```
 
 1. Now, move the `AddSpeakerPayload` and base it on the new `SpeakerPayloadBase`. The code should now look like the following:
 
     ```csharp
-    using System.Collections.Generic;
+    namespace ConferencePlanner.GraphQL.Speakers;
+
     using ConferencePlanner.GraphQL.Common;
     using ConferencePlanner.GraphQL.Data;
 
-    namespace ConferencePlanner.GraphQL.Speakers
+    public class AddSpeakerPayload : SpeakerPayloadBase
     {
-        public class AddSpeakerPayload : SpeakerPayloadBase
+        public AddSpeakerPayload(Speaker speaker)
+            : base(speaker)
         {
-            public AddSpeakerPayload(Speaker speaker)
-                : base(speaker)
-            {
-            }
+        }
 
-            public AddSpeakerPayload(IReadOnlyList<UserError> errors)
-                : base(errors)
-            {
-            }
+        public AddSpeakerPayload(IReadOnlyList<UserError> errors)
+            : base(errors)
+        {
         }
     }
     ```
@@ -176,12 +153,12 @@ Now, that we have some base classes for our mutation let us start to reorganize 
 1. Change the schema configurations so that we can merge the various `Mutation` class that we will have into one. For that replace the schema builder configuration with the following code in the `Startup.cs`:
 
     ```csharp
-    services
+    builder.Services
         .AddGraphQLServer()
+        .RegisterDbContext<ApplicationDbContext>()
         .AddQueryType<Query>()
-        .AddMutationType(d => d.Name("Mutation"))
-            .AddTypeExtension<SpeakerMutations>()
-        .AddType<SpeakerType>()
+        .AddTypeExtension<SpeakerMutations>()
+        .AddTypeExtension<SpeakerExtensions>()
         .AddDataLoader<SpeakerByIdDataLoader>()
         .AddDataLoader<SessionByIdDataLoader>();
     ```
@@ -193,78 +170,60 @@ Now that we have reorganized our mutations, we will refactor the schema to a pro
 1. Enable relay support for the schema.
 
     ```csharp
-    services
+    builder.Services
         .AddGraphQLServer()
+        .RegisterDbContext<ApplicationDbContext>()
         .AddQueryType<Query>()
-        .AddMutationType(d => d.Name("Mutation"))
-            .AddTypeExtension<SpeakerMutations>()
-        .AddType<SpeakerType>()
+        .AddTypeExtension<SpeakerMutations>()
+        .AddTypeExtension<SpeakerExtensions>()
         .EnableRelaySupport()
         .AddDataLoader<SpeakerByIdDataLoader>()
         .AddDataLoader<SessionByIdDataLoader>();
     ```
 
-1. Configure the speaker entity to implement the `Node` interface by adding the node configuration to the `SpeakerType`.
+1. Configure the speaker entity to implement the `Node` interface by adding the node configuration to the `SpeakerExtensions`.
 
     ```csharp
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Threading;
-    using System.Threading.Tasks;
-    using Microsoft.EntityFrameworkCore;
     using ConferencePlanner.GraphQL.Data;
     using ConferencePlanner.GraphQL.DataLoader;
-    using HotChocolate;
     using HotChocolate.Resolvers;
-    using HotChocolate.Types;
+    using Microsoft.EntityFrameworkCore;
 
-    namespace ConferencePlanner.GraphQL.Types
+    namespace ConferencePlanner.GraphQL.Extensions;
+
+    [Node]
+    [ExtendObjectType(typeof(Speaker))]
+    public class SpeakerExtensions
     {
-        public class SpeakerType : ObjectType<Speaker>
+        public async Task<Speaker> GetSpeaker([ID(nameof(Speaker))] int id, [DataLoader] SpeakerByIdDataLoader loader, IResolverContext ctx)
         {
-            protected override void Configure(IObjectTypeDescriptor<Speaker> descriptor)
-            {
-                descriptor
-                    .ImplementsNode()
-                    .IdField(t => t.Id)
-                    .ResolveNode((ctx, id) => ctx.DataLoader<SpeakerByIdDataLoader>().LoadAsync(id, ctx.RequestAborted));
-                        
-                descriptor
-                    .Field(t => t.SessionSpeakers)
-                    .ResolveWith<SpeakerResolvers>(t => t.GetSessionsAsync(default!, default!, default!, default))
-                    .UseDbContext<ApplicationDbContext>()
-                    .Name("sessions");
-            }
+            return await loader.LoadAsync(id, ctx.RequestAborted);
+        }
+        
+        [UseDbContext(typeof(ApplicationDbContext))]
+        public async Task<IEnumerable<Session>> Sessions(
+            [Parent] Speaker speaker,
+            [ScopedService] ApplicationDbContext dbContext,
+            [DataLoader] SessionByIdDataLoader sessionById,
+            CancellationToken cancellationToken)
+        {
+        var sessionIds = await dbContext.Speakers
+                .Where(s => s.Id == speaker.Id)
+                .Include(s => s.SessionSpeakers)
+                .SelectMany(s => s.SessionSpeakers.Select(t => t.SessionId))
+                .ToArrayAsync(cancellationToken: cancellationToken);
 
-            private class SpeakerResolvers
-            {
-                public async Task<IEnumerable<Session>> GetSessionsAsync(
-                    Speaker speaker,
-                    [ScopedService] ApplicationDbContext dbContext,
-                    SessionByIdDataLoader sessionById,
-                    CancellationToken cancellationToken)
-                {
-                    int[] speakerIds = await dbContext.Speakers
-                        .Where(s => s.Id == speaker.Id)
-                        .Include(s => s.SessionSpeakers)
-                        .SelectMany(s => s.SessionSpeakers.Select(t => t.SessionId))
-                        .ToArrayAsync();
-
-                    return await sessionById.LoadAsync(speakerIds, cancellationToken);
-                }
-            }
+            return await sessionById.LoadAsync(sessionIds, cancellationToken);
         }
     }
     ```
 
-   > The following piece of code marked our `SpeakerType` as implementing the `Node` interface. It also defined that the `id` field that the node interface specifies is implemented by the `Id` on our entity. The internal `Id` is consequently rewritten to a global object identifier that contains the internal id plus the type name. Last but not least we defined a `ResolveNode` that is able to load the entity by `id`.
+   > The following piece of code marked our `Speaker` as implementing the `Node` interface. It also defined that the `id` field that the node interface specifies is implemented by the `Id` on our entity. The internal `Id` is consequently rewritten to a global object identifier that contains the internal id plus the type name. Last but not least we defined a `ResolveNode` that is able to load the entity by `id`.
 
     > ```csharp
-    > descriptor
-    >    .ImplementsNode()
-    >    .IdField(t => t.Id)
-    >    .ResolveNode((ctx, id) => ctx.DataLoader<SpeakerByIdDataLoader>()
-    >    .LoadAsync(id, ctx.RequestAborted));
+    > [Node]
+    > [ExtendObjectType(typeof(Speaker))]
+    >
     > ```
 
 1. Head over to the `Query.cs` and annotate the `id` argument of `GetSpeaker` with the `ID` attribute.
