@@ -582,7 +582,7 @@ In our specific case, we want to make the GraphQL API nicer and remove the relat
    > Also, we are binding a new resolver to this field which also rewrites the result type.
    > The new field `sessions` now returns `[Session]`.
 
-1. Register the type with the schema builder in the `Startup.cs`:
+1. Register the type with the schema builder in the `Program.cs`:
 
     ```csharp
     builder.Services

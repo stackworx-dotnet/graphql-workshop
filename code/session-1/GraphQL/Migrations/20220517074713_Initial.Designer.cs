@@ -5,17 +5,18 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
-namespace GraphQL.Migrations
+#nullable disable
+
+namespace ConferencePlanner.GraphQL.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20201010183502_Initial")]
+    [Migration("20220517074713_Initial")]
     partial class Initial
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "5.0.0");
+            modelBuilder.HasAnnotation("ProductVersion", "6.0.5");
 
             modelBuilder.Entity("ConferencePlanner.GraphQL.Data.Speaker", b =>
                 {
@@ -24,6 +25,7 @@ namespace GraphQL.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Bio")
+                        .IsRequired()
                         .HasMaxLength(4000)
                         .HasColumnType("TEXT");
 
@@ -33,6 +35,7 @@ namespace GraphQL.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("WebSite")
+                        .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("TEXT");
 
