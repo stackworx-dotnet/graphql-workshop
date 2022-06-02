@@ -309,7 +309,6 @@ We will start by adding the rest of the DataLoader that we will need. Then we wi
     using Microsoft.EntityFrameworkCore;
     using ConferencePlanner.GraphQL.Data;
     using GreenDonut;
-    using HotChocolate.DataLoader;
 
     public class TrackByIdDataLoader : BatchDataLoader<int, Track>
     {
