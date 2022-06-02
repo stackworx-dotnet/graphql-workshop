@@ -1033,7 +1033,7 @@ In this section, we will optimize our `Query` type by bringing in more fields to
        [ExtendObjectType("Query")]
        public class SpeakerQueries
        {
-           [UseApplicationDbContext]
+           [UseDbContext(typeof(ApplicationDbContext))]
            public Task<List<Speaker>> GetSpeakersAsync(
                [ScopedService] ApplicationDbContext context) =>
                context.Speakers.ToListAsync();
@@ -1100,7 +1100,7 @@ In this section, we will optimize our `Query` type by bringing in more fields to
        [ExtendObjectType("Query")]
        public class SessionQueries
        {
-           [UseApplicationDbContext]
+           [UseDbContext(typeof(ApplicationDbContext))]
            public async Task<IEnumerable<Session>> GetSessionsAsync(
                [ScopedService] ApplicationDbContext context,
                CancellationToken cancellationToken) =>
